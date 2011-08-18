@@ -10,9 +10,7 @@
  *******************************************************************************/
 package org.eclipse.linuxtools.internal.cdt.autotools.core;
 
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.lang.reflect.InvocationTargetException;
@@ -54,14 +52,14 @@ import org.eclipse.cdt.managedbuilder.macros.BuildMacroException;
 import org.eclipse.cdt.managedbuilder.macros.IBuildMacroProvider;
 import org.eclipse.cdt.newmake.core.IMakeCommonBuildInfo;
 import org.eclipse.cdt.ui.CUIPlugin;
+import org.eclipse.core.filesystem.EFS;
+import org.eclipse.core.filesystem.IFileInfo;
+import org.eclipse.core.filesystem.IFileStore;
 import org.eclipse.core.filesystem.URIUtil;
 import org.eclipse.core.resources.IContainer;
-import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.resources.IResourceDelta;
-import org.eclipse.core.resources.IResourceStatus;
-import org.eclipse.core.resources.IWorkspaceRoot;
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.IProgressMonitor;
@@ -120,6 +118,8 @@ public class AutotoolsNewMakeGenerator extends MarkerGenerator {
 	private ICConfigurationDescription cdesc;
 	private IAConfiguration toolsCfg;
 	private IBuilder builder;
+	
+	private IRemoteFileProxy proxy;
 
 	public void generateDependencies() throws CoreException {
 		// TODO Auto-generated method stub
@@ -153,6 +153,7 @@ public class AutotoolsNewMakeGenerator extends MarkerGenerator {
 	public void initialize(IProject project, IManagedBuildInfo info,
 			IProgressMonitor monitor) {
 		this.project = project;
+		proxy = FileProxyManager.getInstance().getFileProxy(project);
 		ICProjectDescription pdesc = CCorePlugin.getDefault().getProjectDescription(project);
 		this.cdesc = pdesc.getActiveConfiguration();
 		this.cfg = info.getDefaultConfiguration();
@@ -187,40 +188,7 @@ public class AutotoolsNewMakeGenerator extends MarkerGenerator {
 		}
 	}
 
-	/*
-	 * (non-Javadoc) Return or create the makefile needed for the build. If we
-	 * are creating the resource, set the derived bit to true so the CM system
-	 * ignores the contents. If the resource exists, respect the existing
-	 * derived setting.
-	 * 
-	 * @param makefilePath @return IFile
-	 */
-	protected IFile createFile(IPath makefilePath) throws CoreException {
-		// Create or get the handle for the makefile
-		IWorkspaceRoot root = CCorePlugin.getWorkspace().getRoot();
-		IFile newFile = root.getFileForLocation(makefilePath);
-		if (newFile == null) {
-			newFile = root.getFile(makefilePath);
-		}
-		// Create the file if it does not exist
-		ByteArrayInputStream contents = new ByteArrayInputStream(new byte[0]);
-		try {
-			newFile.create(contents, false, new SubProgressMonitor(monitor, 1));
-			// Make sure the new file is marked as derived
-			if (!newFile.isDerived()) {
-				newFile.setDerived(true);
-			}
 
-		} catch (CoreException e) {
-			// If the file already existed locally, just refresh to get contents
-			if (e.getStatus().getCode() == IResourceStatus.PATH_OCCUPIED)
-				newFile.refreshLocal(IResource.DEPTH_ZERO, null);
-			else
-				throw e;
-		}
-
-		return newFile;
-	}
 
 	/*
 	 * Create a directory
@@ -233,9 +201,15 @@ public class AutotoolsNewMakeGenerator extends MarkerGenerator {
 		boolean rc = true;
 		if (dirName.length() == 0 || dirName.equals("."))
 			path = project.getLocation().append(dirName);
-		File f = path.toFile();
-		if (!f.exists())
-			rc = f.mkdirs();
+		IFileStore fs = proxy.getResource(path.toString());
+		IFileInfo finfo = fs.fetchInfo();
+		if (!finfo.exists()) {
+			try {
+				fs.mkdir(0, monitor);
+			} catch (CoreException e) {
+				return false;
+			}
+		}
 
 		return rc;
 	}
@@ -366,17 +340,17 @@ public class AutotoolsNewMakeGenerator extends MarkerGenerator {
 			IPath topConfigFile = project.getLocation().append(CONFIG_STATUS);
 			IPath makefilePath = buildLocation.append(MAKEFILE);
 			IPath topMakefilePath = project.getLocation().append(MAKEFILE);
-			File configStatus = configfile.toFile();
-			File topConfigStatus = topConfigFile.toFile();
-			File makefile = makefilePath.toFile();
-			File topMakefile = topMakefilePath.toFile();
+			IFileStore configStatus = proxy.getResource(configfile.toString());
+			IFileStore topConfigStatus = proxy.getResource(topConfigFile.toString());
+			IFileStore makefile = proxy.getResource(makefilePath.toString());
+			IFileStore topMakefile = proxy.getResource(topMakefilePath.toString());
 
 			// Check if a configure has been done in the top-level source directory
-			if (!(configfile.equals(topConfigFile)) && topConfigStatus.exists()) {
+			if (!(configfile.equals(topConfigFile)) && topConfigStatus.fetchInfo().exists()) {
 				// Must perform distclean on source directory because 2nd configuration
 				// cannot occur otherwise
 				// There is a make target for cleaning.
-				if (topMakefile != null && topMakefile.exists()) {
+				if (topMakefile != null && topMakefile.fetchInfo().exists()) {
 					String[] makeargs = new String[1];
 					IPath makeCmd = new Path("make"); //$NON-NLS-1$
 					String target = null;
@@ -412,7 +386,10 @@ public class AutotoolsNewMakeGenerator extends MarkerGenerator {
 				// and the Makefile might not detect a rebuild is required.  In
 				// addition, the build directory itself could have been changed and
 				// we should remove the previous build.
-				if (buildLocation != null && buildLocation.toFile().exists()) {
+				IFileStore buildLocationStore = null;
+				if (buildLocation != null)
+					buildLocationStore = proxy.getResource(buildLocation.toString());
+				if (buildLocationStore != null && buildLocationStore.fetchInfo().exists()) {
 					// See what type of cleaning the user has set up in the
 					// build properties dialog.
 					String cleanDelete = null;
@@ -423,10 +400,10 @@ public class AutotoolsNewMakeGenerator extends MarkerGenerator {
 					}
 					
 					if (cleanDelete != null && cleanDelete.equals(AutotoolsPropertyConstants.TRUE))
-						buildLocation.toFile().delete();
+						buildLocationStore.delete(EFS.NONE, monitor);
 					else {
 						// There is a make target for cleaning.
-						if (makefile != null && makefile.exists()) {
+						if (makefile != null && makefile.fetchInfo().exists()) {
 							String[] makeargs = new String[1];
 							IPath makeCmd = new Path("make"); //$NON-NLS-1$
 							String target = null;
@@ -464,17 +441,19 @@ public class AutotoolsNewMakeGenerator extends MarkerGenerator {
 			ArrayList<String> configureEnvs = new ArrayList<String>();
 			ArrayList<String> configureCmdParms = new ArrayList<String>();
 			IPath configurePath = getConfigurePath(configureEnvs, configureCmdParms);
+			IFileStore configureStore = proxy.getResource(configurePath.toString());
 			String[] configArgs = getConfigArgs(configureCmdParms);
 			ArrayList<String> autogenEnvs = new ArrayList<String>();
 			ArrayList<String> autogenCmdParms = new ArrayList<String>();
 			IPath autogenPath = getAutogenPath(autogenEnvs, autogenCmdParms);
+			IFileStore autogenStore = proxy.getResource(autogenPath.toString());
 			
 			// Check if we have a config.status (meaning configure has already run).
-    		if (!needFullConfigure && configStatus != null && configStatus.exists()) {
+    		if (!needFullConfigure && configStatus != null && configStatus.fetchInfo().exists()) {
 			    // If no corresponding Makefile in the same build location, then we
 	            // can simply run config.status again to ensure the top level Makefile has been
 				// created.
-				if (makefile == null || !makefile.exists()) {
+				if (makefile == null || !makefile.fetchInfo().exists()) {
 					rc = runScript(configfile, buildLocation, null, 
 							AutotoolsPlugin.getFormattedString("MakeGenerator.run.config.status", new String[]{buildDir}), //$NON-NLS-1$
 							errMsg, console, null, consoleStart);
@@ -482,7 +461,7 @@ public class AutotoolsNewMakeGenerator extends MarkerGenerator {
 				}
 			}
 			// Look for configure and configure from scratch
-			else if (configurePath.toFile().exists()) {
+			else if (configureStore.fetchInfo().exists()) {
 				rc = runScript(configurePath, 
 						buildLocation,
 						configArgs, 
@@ -490,8 +469,7 @@ public class AutotoolsNewMakeGenerator extends MarkerGenerator {
 						errMsg, console, configureEnvs, consoleStart);
 				consoleStart = false;
 				if (rc != IStatus.ERROR) {
-					File makefileFile = buildLocation.append(MAKEFILE).toFile();
-					addMakeTargetsToManager(makefileFile);
+					addMakeTargetsToManager(buildLocation.append(MAKEFILE));
 					// TODO: should we do something special if configure doesn't
 					// return ok?
 					toolsCfg.setDirty(false);
@@ -499,11 +477,11 @@ public class AutotoolsNewMakeGenerator extends MarkerGenerator {
 			}
 			// If no configure, look for autogen.sh which may create configure and
     		// possibly even run it.
-			else if (autogenPath.toFile().exists()) {
+			else if (autogenStore.fetchInfo().exists()) {
 				// Remove the existing config.status file since we use it
 				// to figure out if configure was run.
-				if (configStatus.exists())
-					configStatus.delete();
+				if (configStatus.fetchInfo().exists())
+					configStatus.delete(EFS.NONE, monitor);
 				// Get any user-specified arguments for autogen.
 				String[] autogenArgs = getAutogenArgs(autogenCmdParms);
 				rc = runScript(autogenPath,
@@ -512,24 +490,22 @@ public class AutotoolsNewMakeGenerator extends MarkerGenerator {
 						errMsg, console, autogenEnvs, consoleStart);
 				consoleStart = false;
 				if (rc != IStatus.ERROR) {
-					configStatus = configfile.toFile();
+					configStatus = proxy.getResource(configfile.toString());
 					// Check for config.status.  If it is created, then
 					// autogen.sh ran configure and we should not run it
 					// ourselves.
-					if (configStatus == null || !configStatus.exists()) {
+					if (configStatus == null || !configStatus.fetchInfo().exists()) {
 						rc = runScript(configurePath, 
 								buildLocation,
 								configArgs, 
 								AutotoolsPlugin.getFormattedString("MakeGenerator.gen.makefile", new String[]{buildDir}), //$NON-NLS-1$
 								errMsg, console, configureEnvs, false);
 						if (rc != IStatus.ERROR) {
-							File makefileFile = buildLocation.append(MAKEFILE).toFile();
-							addMakeTargetsToManager(makefileFile);
+							addMakeTargetsToManager(buildLocation.append(MAKEFILE));
 							toolsCfg.setDirty(false);
 						}
 					} else {
-						File makefileFile = buildLocation.append(MAKEFILE).toFile();
-						addMakeTargetsToManager(makefileFile);
+						addMakeTargetsToManager(buildLocation.append(MAKEFILE));
 						toolsCfg.setDirty(false);
 					}
 				}
@@ -546,9 +522,7 @@ public class AutotoolsNewMakeGenerator extends MarkerGenerator {
 						errMsg, console, consoleStart);
 				consoleStart = false;
 				if (rc != IStatus.ERROR) {
-					File makefileFile = project.getLocation().append(buildDir)
-					.append(MAKEFILE).toFile();
-					addMakeTargetsToManager(makefileFile);
+					addMakeTargetsToManager(project.getLocation().append(buildDir).append(MAKEFILE));
 					toolsCfg.setDirty(false);
 				}
 			}
@@ -568,15 +542,15 @@ public class AutotoolsNewMakeGenerator extends MarkerGenerator {
 				consoleStart = false;
 				// Check if configure generated and if yes, run it.
 				if (rc != IStatus.ERROR) {
-					if (configurePath.toFile().exists()) {
+					configureStore = proxy.getResource(configurePath.toString());
+					if (configureStore.fetchInfo().exists()) {
 						rc = runScript(configurePath, 
 								buildLocation,
 								configArgs, 
 								AutotoolsPlugin.getFormattedString("MakeGenerator.gen.makefile", new String[]{buildDir}), //$NON-NLS-1$
 								errMsg, console, configureEnvs, false);
 						if (rc != IStatus.ERROR) {
-							File makefileFile = buildLocation.append(MAKEFILE).toFile();
-							addMakeTargetsToManager(makefileFile);
+							addMakeTargetsToManager(buildLocation.append(MAKEFILE));
 							// TODO: should we do something special if configure doesn't
 							// return ok?
 							toolsCfg.setDirty(false);
@@ -585,7 +559,7 @@ public class AutotoolsNewMakeGenerator extends MarkerGenerator {
 				}
 			}
     		// If we didn't create a Makefile, consider that an error.
-			if (makefile == null || !makefile.exists()) {
+			if (makefile == null || !makefile.fetchInfo().exists()) {
 				rc = IStatus.ERROR;
 				errMsg = AutotoolsPlugin.getResourceString("MakeGenerator.didnt.generate"); //$NON-NLS-1$
 			}
@@ -708,7 +682,7 @@ public class AutotoolsNewMakeGenerator extends MarkerGenerator {
 	
 	protected boolean makefileCvsExists() {
 		IPath makefileCVSPath = getMakefileCVSPath();
-		return makefileCVSPath.toFile().exists();
+		return proxy.getResource(makefileCVSPath.toString()).fetchInfo().exists();
 	}
 
 	protected IPath getAutogenPath(ArrayList<String> envVars, ArrayList<String> cmdParms) {
@@ -1216,9 +1190,10 @@ public class AutotoolsNewMakeGenerator extends MarkerGenerator {
 	 * @param makefileFile the Makefile to parse
 	 * @throws CoreException
 	 */
-	private void addMakeTargetsToManager(File makefileFile) throws CoreException {
+	private void addMakeTargetsToManager(IPath makefileFile) throws CoreException {
 		// We don't bother if the Makefile wasn't created.
-		if (makefileFile == null || !makefileFile.exists())
+		IFileStore makefileStore = proxy.getResource(makefileFile.toString());
+		if (makefileStore == null || !makefileStore.fetchInfo().exists())
 			return;
 		
 		checkCancel();
@@ -1230,7 +1205,7 @@ public class AutotoolsNewMakeGenerator extends MarkerGenerator {
 		IMakeTargetManager makeTargetManager = 
 			MakeCorePlugin.getDefault().getTargetManager();
 		
-		IMakefile makefile = MakeCorePlugin.createMakefile(makefileFile.toURI(), false, null);
+		IMakefile makefile = MakeCorePlugin.createMakefile(proxy.toURI(makefileFile), false, null);
 		ITargetRule[] targets = makefile.getTargetRules();
 		ITarget target = null;
 		Map<String, IMakeTarget> makeTargets = new HashMap<String, IMakeTarget>(); // use a HashMap so duplicate names are handled

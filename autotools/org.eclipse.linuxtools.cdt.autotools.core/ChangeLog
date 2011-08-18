@@ -1,3 +1,16 @@
+2011-08-18  Jeff Johnston  <jjohnstn@redhat.com>
+
+	* src/org/eclipse/linuxtools/internal/cdt/autotools/core/LocalFileProxy.java: New file.
+	* src/org/eclipse/linuxtools/internal/cdt/autotools/core/FileProxyManager.java: Ditto.
+	* src/org/eclipse/linuxtools/internal/cdt/autotools/core/IRemoteFileProxy.java: Ditto.
+	* src/org/eclipse/linuxtools/internal/cdt/autotools/core/AutotoolsNewMakeGenerator.java (initialize): Set
+	file proxy.
+	(createFile): Removed.
+	(createDirectory): Switch to use file proxy.
+	(regenerateMakefiles): Ditto.
+	(makefileCvsExists): Ditto.
+	(addMakeTargetsToManager): Ditto plus change method argument to accept IPath instead of File.
+
 2011-08-16  Jeff Johnston  <jjohnstn@redhat.com>
 
 	* META-INF/MANIFEST.MF: Bump version to 1.0.2.
