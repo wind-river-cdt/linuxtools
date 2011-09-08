@@ -26,7 +26,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.eclipse.cdt.core.CCorePlugin;
-import org.eclipse.cdt.core.CommandLauncher;
 import org.eclipse.cdt.core.ConsoleOutputStream;
 import org.eclipse.cdt.core.ICDescriptor;
 import org.eclipse.cdt.core.envvar.IEnvironmentVariable;
@@ -153,7 +152,7 @@ public class AutotoolsNewMakeGenerator extends MarkerGenerator {
 	public void initialize(IProject project, IManagedBuildInfo info,
 			IProgressMonitor monitor) {
 		this.project = project;
-		proxy = FileProxyManager.getInstance().getFileProxy(project);
+		proxy = RemoteProxyManager.getInstance().getFileProxy(project);
 		ICProjectDescription pdesc = CCorePlugin.getDefault().getProjectDescription(project);
 		this.cdesc = pdesc.getActiveConfiguration();
 		this.cfg = info.getDefaultConfiguration();
@@ -777,7 +776,8 @@ public class AutotoolsNewMakeGenerator extends MarkerGenerator {
 		consoleOutStream.flush();
 
 		// Get a launcher for the config command
-		CommandLauncher launcher = new CommandLauncher();
+		IRemoteCommandLauncher launcher = RemoteProxyManager.getInstance().getLauncher(project);
+		
 		// Set the environment
 		IEnvironmentVariable variables[] = 
 			CCorePlugin.getDefault().getBuildEnvironmentManager().getVariables(cdesc, true);
@@ -800,7 +800,7 @@ public class AutotoolsNewMakeGenerator extends MarkerGenerator {
 		OutputStream stdout = epm.getOutputStream();
 		OutputStream stderr = stdout;
 
-		launcher.showCommand(true);
+//		launcher.showCommand(true);
 		Process proc = launcher.execute(commandPath, configTargets, env,
 				runPath, new NullProgressMonitor());
 		if (proc != null) {
@@ -812,7 +812,7 @@ public class AutotoolsNewMakeGenerator extends MarkerGenerator {
 			}
 
 			if (launcher.waitAndRead(stdout, stderr, new SubProgressMonitor(
-					monitor, IProgressMonitor.UNKNOWN)) != CommandLauncher.OK) {
+					monitor, IProgressMonitor.UNKNOWN)) != IRemoteCommandLauncher.OK) {
 				errMsg = launcher.getErrorMessage();
 			}
 
@@ -889,7 +889,7 @@ public class AutotoolsNewMakeGenerator extends MarkerGenerator {
 	private String getWinOSType() {
 		if (winOSType.equals("")) {
 			try {
-				CommandLauncher launcher = new CommandLauncher();
+				IRemoteCommandLauncher launcher = RemoteProxyManager.getInstance().getLauncher(project);
 				ByteArrayOutputStream out = new ByteArrayOutputStream();
 				launcher.execute(
 						new Path(SHELL_COMMAND), //$NON-NLS-1$
@@ -897,7 +897,7 @@ public class AutotoolsNewMakeGenerator extends MarkerGenerator {
 						new String[0],
 						new Path("."), //$NON-NLS-1$
 						new NullProgressMonitor());
-				if (launcher.waitAndRead(out, out) == CommandLauncher.OK)
+				if (launcher.waitAndRead(out, out, new NullProgressMonitor()) == IRemoteCommandLauncher.OK)
 					winOSType = out.toString().trim();
 			} catch (CoreException e) {
 				// do nothing
@@ -911,7 +911,7 @@ public class AutotoolsNewMakeGenerator extends MarkerGenerator {
     // doesn't cause Makefile to choke. For Cygwin we use /cygdrive/C/a/b
     private String getPathString(IPath path) {
             String s = path.toString();
-            if (Platform.getOS().equals(Platform.OS_WIN32)) {
+            if (RemoteProxyManager.getInstance().getOS(project).equals(Platform.OS_WIN32)) {
             	if (getWinOSType().equals("cygwin")) {
                     s = s.replaceAll("^([A-Z])(:)", "/cygdrive/$1");            		
             	} else {
@@ -946,8 +946,9 @@ public class AutotoolsNewMakeGenerator extends MarkerGenerator {
         configTargets[0] = getPathString(commandPath);
 
         // Fix for bug #343731
-        if (Platform.getOS().equals(Platform.OS_WIN32)
-                || Platform.getOS().equals(Platform.OS_MACOSX)) {
+        RemoteProxyManager rpm = RemoteProxyManager.getInstance();
+        if (rpm.getOS(project).equals(Platform.OS_WIN32)
+                || rpm.getOS(project).equals(Platform.OS_MACOSX)) {
         	removePWD = true;
             // Neither Mac or Windows support calling scripts directly.
             String command = null;
@@ -1004,7 +1005,7 @@ public class AutotoolsNewMakeGenerator extends MarkerGenerator {
 		consoleOutStream.flush();
 
 		// Get a launcher for the config command
-		CommandLauncher launcher = new CommandLauncher();
+		IRemoteCommandLauncher launcher = RemoteProxyManager.getInstance().getLauncher(project);
 		// Set the environment
 		IEnvironmentVariable variables[] = 
 			CCorePlugin.getDefault().getBuildEnvironmentManager().getVariables(cdesc, true);
@@ -1033,7 +1034,7 @@ public class AutotoolsNewMakeGenerator extends MarkerGenerator {
 		OutputStream stdout = epm.getOutputStream();
 		OutputStream stderr = stdout;
 
-		launcher.showCommand(true);
+//		launcher.showCommand(true);
 		// Run the shell script via shell command.
 		Process proc = launcher.execute(new Path(SHELL_COMMAND), configTargets, env,
 				runPath, new NullProgressMonitor());
@@ -1046,7 +1047,7 @@ public class AutotoolsNewMakeGenerator extends MarkerGenerator {
 			}
 
 			if (launcher.waitAndRead(stdout, stderr, new SubProgressMonitor(
-					monitor, IProgressMonitor.UNKNOWN)) != CommandLauncher.OK) {
+					monitor, IProgressMonitor.UNKNOWN)) != IRemoteCommandLauncher.OK) {
 				errMsg = launcher.getErrorMessage();
 			}
 

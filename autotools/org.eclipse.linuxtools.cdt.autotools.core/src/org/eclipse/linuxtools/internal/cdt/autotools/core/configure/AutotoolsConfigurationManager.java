@@ -14,6 +14,8 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -35,6 +37,8 @@ import org.eclipse.cdt.managedbuilder.core.IOption;
 import org.eclipse.cdt.managedbuilder.core.ITool;
 import org.eclipse.cdt.managedbuilder.core.IToolChain;
 import org.eclipse.cdt.managedbuilder.core.ManagedBuildManager;
+import org.eclipse.core.filesystem.EFS;
+import org.eclipse.core.filesystem.IFileStore;
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.resources.IResource;
 import org.eclipse.core.resources.IResourceChangeEvent;
@@ -42,8 +46,12 @@ import org.eclipse.core.resources.IResourceChangeListener;
 import org.eclipse.core.resources.IResourceDelta;
 import org.eclipse.core.resources.IWorkspaceRoot;
 import org.eclipse.core.resources.ResourcesPlugin;
+import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IPath;
+import org.eclipse.core.runtime.NullProgressMonitor;
 import org.eclipse.linuxtools.cdt.autotools.core.AutotoolsPlugin;
+import org.eclipse.linuxtools.internal.cdt.autotools.core.IRemoteFileProxy;
+import org.eclipse.linuxtools.internal.cdt.autotools.core.RemoteProxyManager;
 import org.eclipse.linuxtools.internal.cdt.autotools.core.configure.AutotoolsConfiguration.Option;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
@@ -177,12 +185,14 @@ public class AutotoolsConfigurationManager implements IResourceChangeListener {
 		if (list == null) {
 			try {
 				IPath fileLocation = project.getLocation().append(CFG_FILE_NAME);
-				File dirFile = fileLocation.toFile();
+				IRemoteFileProxy proxy = RemoteProxyManager.getInstance().getFileProxy(project);
+				IFileStore f = proxy.getResource(fileLocation.toString());
 				Map<String, IAConfiguration> cfgList = new HashMap<String, IAConfiguration>();
 				DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
 				DocumentBuilder db = dbf.newDocumentBuilder();
-				if (dirFile.exists()) {
-					Document d = db.parse(dirFile);
+				if (f.fetchInfo().exists()) {
+					InputStream is = f.openInputStream(EFS.NONE, new NullProgressMonitor());
+					Document d = db.parse(is);
 					Element e = d.getDocumentElement();
 					// Get the stored configuration data
 					NodeList cfgs = e.getElementsByTagName("configuration"); // $NON-NLS-1$
@@ -233,6 +243,9 @@ public class AutotoolsConfigurationManager implements IResourceChangeListener {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
 			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (CoreException e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
@@ -399,27 +412,44 @@ public class AutotoolsConfigurationManager implements IResourceChangeListener {
 			}
 			IProject project = (IProject)res;
 			IPath output = project.getLocation().append(CFG_FILE_NAME);
-			File f = output.toFile();
-			if (!f.exists())
-				f.createNewFile();
-			if (f.exists()) {
-				PrintWriter p = new PrintWriter(new BufferedWriter(new FileWriter(f)));
-				Map<String, IAConfiguration> cfgs = getSavedConfigs(project);
-				if (cfgs == null)
-					return;
-				p.println("<?xml version=\"1.0\" encoding=\"UTF-8\"?>"); //$NON-NLS-1$
-				p.println("<configurations>"); // $NON-NLS-1$
-				Option[] optionList = AutotoolsConfiguration.getOptionList();
-				HashSet<String> savedIds = new HashSet<String>();
-				setSyncing(true);
-				for (int x = 0; x < cfgds.length; ++x) {
-					ICConfigurationDescription cfgd = cfgds[x];
-					@SuppressWarnings("unused")
-					CConfigurationData data = cfgd.getConfigurationData();
-					String id = cfgd.getId();
-					savedIds.add(id);
-					IAConfiguration cfg = getTmpConfiguration(project, cfgd);
-					cfgs.put(id, cfg); // add to list in case we have a new configuration not yet added to Project Description
+			IRemoteFileProxy proxy = RemoteProxyManager.getInstance().getFileProxy(project);
+			IFileStore f = proxy.getResource(output.toString());
+			PrintWriter p = new PrintWriter(new BufferedWriter(new OutputStreamWriter(f.openOutputStream(EFS.NONE, new NullProgressMonitor()))));
+			Map<String, IAConfiguration> cfgs = getSavedConfigs(project);
+			if (cfgs == null)
+				return;
+			p.println("<?xml version=\"1.0\" encoding=\"UTF-8\"?>"); //$NON-NLS-1$
+			p.println("<configurations>"); // $NON-NLS-1$
+			Option[] optionList = AutotoolsConfiguration.getOptionList();
+			HashSet<String> savedIds = new HashSet<String>();
+			setSyncing(true);
+			for (int x = 0; x < cfgds.length; ++x) {
+				ICConfigurationDescription cfgd = cfgds[x];
+				@SuppressWarnings("unused")
+				CConfigurationData data = cfgd.getConfigurationData();
+				String id = cfgd.getId();
+				savedIds.add(id);
+				IAConfiguration cfg = getTmpConfiguration(project, cfgd);
+				cfgs.put(id, cfg); // add to list in case we have a new configuration not yet added to Project Description
+				p.println("<configuration id=\"" + id + "\">"); //$NON-NLS-1$ //$NON-NLS-2$ 
+				for (int j = 0; j < optionList.length; ++j) {
+					Option option = optionList[j];
+					IConfigureOption opt = cfg.getOption(option.getName());
+					if (!opt.isCategory())
+						p.println("<option id=\"" + option.getName() + "\" value=\"" + opt.getValue() + "\"/>"); //$NON-NLS-1$ //$NON-NLS-2$ // $NON-NLS-3$
+				}
+				p.println("</configuration>"); //$NON-NLS-1$
+				syncNameField(cfgd);
+			}
+			setSyncing(false);
+
+			// Put all the remaining configurations already saved back into the file.
+			// These represent deleted configurations, but confirmation has not occurred.
+			for (Iterator<String> i = cfgs.keySet().iterator(); i.hasNext(); ) {
+				String id = i.next();
+				// A remaining id won't appear in our savedIds list.
+				if (!savedIds.contains(id)) {
+					IAConfiguration cfg = cfgs.get(id);
 					p.println("<configuration id=\"" + id + "\">"); //$NON-NLS-1$ //$NON-NLS-2$ 
 					for (int j = 0; j < optionList.length; ++j) {
 						Option option = optionList[j];
@@ -428,31 +458,11 @@ public class AutotoolsConfigurationManager implements IResourceChangeListener {
 							p.println("<option id=\"" + option.getName() + "\" value=\"" + opt.getValue() + "\"/>"); //$NON-NLS-1$ //$NON-NLS-2$ // $NON-NLS-3$
 					}
 					p.println("</configuration>"); //$NON-NLS-1$
-					syncNameField(cfgd);
 				}
-				setSyncing(false);
-
-				// Put all the remaining configurations already saved back into the file.
-				// These represent deleted configurations, but confirmation has not occurred.
-				for (Iterator<String> i = cfgs.keySet().iterator(); i.hasNext(); ) {
-					String id = i.next();
-					// A remaining id won't appear in our savedIds list.
-					if (!savedIds.contains(id)) {
-						IAConfiguration cfg = cfgs.get(id);
-						p.println("<configuration id=\"" + id + "\">"); //$NON-NLS-1$ //$NON-NLS-2$ 
-						for (int j = 0; j < optionList.length; ++j) {
-							Option option = optionList[j];
-							IConfigureOption opt = cfg.getOption(option.getName());
-							if (!opt.isCategory())
-								p.println("<option id=\"" + option.getName() + "\" value=\"" + opt.getValue() + "\"/>"); //$NON-NLS-1$ //$NON-NLS-2$ // $NON-NLS-3$
-						}
-						p.println("</configuration>"); //$NON-NLS-1$
-					}
-				}
-				p.println("</configurations>");
-				p.close();
 			}
-		} catch (IOException e) {
+			p.println("</configurations>");
+			p.close();
+		} catch (CoreException e) {
 			AutotoolsPlugin.log(e);
 		}
 	}

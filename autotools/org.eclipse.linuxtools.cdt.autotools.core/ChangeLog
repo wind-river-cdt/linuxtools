@@ -1,3 +1,20 @@
+2011-09-08  Jeff Johnston  <jjohnstn@redhat.com>
+
+	* src/org/eclipse/linuxtools/internal/cdt/autotools/core/configure/AutotoolsConfigurationManager.java (applyConfigs):
+	Use remote file proxy to save .autotools file.
+	(getSavedConfigs): Use remote file proxy to access .autotools file.
+	* src/org/eclipse/linuxtools/internal/cdt/autotools/core/AutotoolsNewMakeGenerator.java (runScript): Use
+	remote launch proxy.
+	(getWinOSType): Ditto.
+	(runCommand): Ditto.
+	(makefileCvsExists): Use remote file proxy.
+	(regenerateMakefiles): Ditto.
+	(createDirectory): Ditto.
+	(initialize): Get remote file proxy for current project.
+	* src/org/eclipse/linuxtools/internal/cdt/autotools/core/PkgconfigErrorResolution.java (run): Use
+	remote command launch proxy.
+	* src/org/eclipse/linuxtools/internal/cdt/autotools/core/RemoteProxyManager.java: New class.
+
 2011-08-18  Jeff Johnston  <jjohnstn@redhat.com>
 
 	* src/org/eclipse/linuxtools/internal/cdt/autotools/core/LocalFileProxy.java: New file.

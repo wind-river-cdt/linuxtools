@@ -14,9 +14,10 @@ import java.io.IOException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.eclipse.cdt.core.CommandLauncher;
 import org.eclipse.cdt.core.ConsoleOutputStream;
 import org.eclipse.core.resources.IMarker;
+import org.eclipse.core.resources.IProject;
+import org.eclipse.core.resources.IResource;
 import org.eclipse.core.runtime.CoreException;
 import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.NullProgressMonitor;
@@ -56,7 +57,9 @@ public class PkgconfigErrorResolution implements IMarkerResolution {
 		IPath pkgconfigPath = 
 			new Path("/usr/lib/pkgconfig").append(pkgName+".pc"); //$NON-NLS-1$ //$NON-NLS-2$
 		// Get a launcher for the config command
-		CommandLauncher launcher = new CommandLauncher();
+		IResource resource = marker.getResource();
+		IProject project = resource.getProject();
+		IRemoteCommandLauncher launcher = RemoteProxyManager.getInstance().getLauncher(project);
 		IPath commandPath = new Path("rpm"); //$NON-NLS-1$
 		String[] commandArgs = 
 			new String[] {"-q", //$NON-NLS-1$
@@ -78,7 +81,7 @@ public class PkgconfigErrorResolution implements IMarkerResolution {
 				} catch (IOException e) {
 				}
 				if (launcher.waitAndRead(output, output, new NullProgressMonitor())
-						!= CommandLauncher.OK) {
+						!= IRemoteCommandLauncher.OK) {
 					AutotoolsPlugin.logErrorMessage(launcher.getErrorMessage());
 				} else {
 					String result = output.readBuffer();
