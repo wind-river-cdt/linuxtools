@@ -19,7 +19,6 @@ import java.util.HashMap;
 import java.util.StringTokenizer;
 
 import org.eclipse.cdt.core.CCorePlugin;
-import org.eclipse.cdt.core.CommandLauncher;
 import org.eclipse.cdt.core.ConsoleOutputStream;
 import org.eclipse.cdt.core.envvar.IEnvironmentVariable;
 import org.eclipse.cdt.core.resources.IConsole;
@@ -50,6 +49,8 @@ import org.eclipse.jface.dialogs.ProgressMonitorDialog;
 import org.eclipse.jface.operation.IRunnableWithProgress;
 import org.eclipse.linuxtools.cdt.autotools.ui.AutotoolsUIPlugin;
 import org.eclipse.linuxtools.internal.cdt.autotools.core.AutotoolsNewMakeGenerator;
+import org.eclipse.linuxtools.internal.cdt.autotools.core.IRemoteCommandLauncher;
+import org.eclipse.linuxtools.internal.cdt.autotools.core.RemoteProxyManager;
 import org.eclipse.swt.widgets.Shell;
 
 public abstract class InvokeAction extends AbstractTargetAction {
@@ -233,21 +234,23 @@ public abstract class InvokeAction extends AbstractTargetAction {
 		private String[] envList;
 		private IPath execDir;
 		private int status;
+		private IProject project;
 		private HashMap<String, String> outputs = null;
 		
 		public ExecuteProgressDialog(IPath command, String[] argumentList,
-				String[] envList, IPath execDir) {
+				String[] envList, IPath execDir, IProject project) {
 			this.command = command;
 			this.argumentList = argumentList;
 			this.envList = envList;
 			this.execDir = execDir;
+			this.project = project;
 		}
 
 		public void run(IProgressMonitor monitor)
 		throws InvocationTargetException, InterruptedException {
 			ByteArrayOutputStream stdout = new ByteArrayOutputStream();
 			ByteArrayOutputStream stderr = new ByteArrayOutputStream();
-			CommandLauncher cmdL = new CommandLauncher();
+			IRemoteCommandLauncher cmdL = RemoteProxyManager.getInstance().getLauncher(project);
 			outputs = null;
 
 			// invoke command
@@ -259,7 +262,7 @@ public abstract class InvokeAction extends AbstractTargetAction {
 				Process process = cmdL.execute(command, argumentList, envList,
 						execDir, new NullProgressMonitor());
 
-				if (cmdL.waitAndRead(stdout, stderr) == CommandLauncher.OK) {
+				if (cmdL.waitAndRead(stdout, stderr, new NullProgressMonitor()) == IRemoteCommandLauncher.OK) {
 					try {
 						status = 0;
 						monitor.done();
@@ -302,10 +305,10 @@ public abstract class InvokeAction extends AbstractTargetAction {
 	
 	
 	protected HashMap<String, String> executeCommand(IPath command,
-			String[] argumentList, String[] envList, IPath execDir) {
+			String[] argumentList, String[] envList, IPath execDir, IProject project) {
 		try {
 			ExecuteProgressDialog d = new ExecuteProgressDialog(command,
-					argumentList, envList, execDir);
+					argumentList, envList, execDir, project);
 			new ProgressMonitorDialog(new Shell()).run(false, false, d);
 			if (d.getStatus() == -1)
 				showError(InvokeMessages
@@ -371,7 +374,7 @@ public abstract class InvokeAction extends AbstractTargetAction {
 								ArrayList<String> additionalEnvs = new ArrayList<String>();
 								String strippedCommand = AutotoolsNewMakeGenerator.stripEnvVars(command, additionalEnvs);
 								// Get a launcher for the config command
-								CommandLauncher launcher = new CommandLauncher();
+								IRemoteCommandLauncher launcher = RemoteProxyManager.getInstance().getLauncher(project);
 								// Set the environment
 								IEnvironmentVariable variables[] = ManagedBuildManager
 										.getEnvironmentVariableProvider().getVariables(cfg, true);
@@ -393,8 +396,9 @@ public abstract class InvokeAction extends AbstractTargetAction {
 								// For Windows and Mac, we cannot run a script directly (in this case, the
 								// autotools are scripts).  We need to run "sh -c command args where command
 								// plus args is represented in a single string.
-						        if (Platform.getOS().equals(Platform.OS_WIN32)
-						                || Platform.getOS().equals(Platform.OS_MACOSX)) {
+								RemoteProxyManager rpm = RemoteProxyManager.getInstance();
+						        if (rpm.getOS(project).equals(Platform.OS_WIN32)
+						                || rpm.getOS(project).equals(Platform.OS_MACOSX)) {
 						            // Neither Mac or Windows support calling scripts directly.
 						            String command = strippedCommand;
 						            for (String arg : argumentList) {
@@ -415,7 +419,7 @@ public abstract class InvokeAction extends AbstractTargetAction {
 						        OutputStream stdout = consoleOutStream;
 								OutputStream stderr = consoleOutStream;
 
-								launcher.showCommand(true);
+//								launcher.showCommand(true);
 								// Run the shell script via shell command.
 								Process proc = launcher.execute(new Path(SHELL_COMMAND), newArgumentList, env,
 										execDir, new NullProgressMonitor());
@@ -428,7 +432,7 @@ public abstract class InvokeAction extends AbstractTargetAction {
 									}
 
 									if (launcher.waitAndRead(stdout, stderr, new SubProgressMonitor(
-											monitor, IProgressMonitor.UNKNOWN)) != CommandLauncher.OK) {
+											monitor, IProgressMonitor.UNKNOWN)) != IRemoteCommandLauncher.OK) {
 										errMsg = launcher.getErrorMessage();
 									}
 

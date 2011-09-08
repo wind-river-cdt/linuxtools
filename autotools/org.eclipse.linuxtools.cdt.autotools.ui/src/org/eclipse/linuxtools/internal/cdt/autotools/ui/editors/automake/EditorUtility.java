@@ -141,21 +141,21 @@ public class EditorUtility {
 		
 		if (file != null) {
 		try {
-				if (!isLinked(file)) {
-					File tempFile = file.getRawLocation().toFile();
-				
-					if (tempFile != null){
-						String canonicalPath = null;
-						try {
-							canonicalPath = tempFile.getCanonicalPath();
-						} catch (IOException e1) {}
-						
-						if (canonicalPath != null){
-							IPath path = new Path(canonicalPath);
-							file = CUIPlugin.getWorkspace().getRoot().getFileForLocation(path);
-						}
-					}
-				}
+//				if (!isLinked(file)) {
+//					File tempFile = file.getRawLocation().toFile();
+//				
+//					if (tempFile != null){
+//						String canonicalPath = null;
+//						try {
+//							canonicalPath = tempFile.getCanonicalPath();
+//						} catch (IOException e1) {}
+//						
+//						if (canonicalPath != null){
+//							IPath path = new Path(canonicalPath);
+//							file = CUIPlugin.getWorkspace().getRoot().getFileForLocation(path);
+//						}
+//					}
+//				}
 				
 				IEditorInput input = getEditorInput(file);
 				if (input != null) {

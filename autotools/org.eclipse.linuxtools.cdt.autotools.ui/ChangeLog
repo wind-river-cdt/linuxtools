@@ -1,3 +1,14 @@
+2011-09-08  Jeff Johnston  <jjohnstn@redhat.com>
+
+	* src/org/eclipse/linuxtools/internal/cdt/autotools/ui/editors/automake/Target.java: Remote exits and
+	lastModified methods.
+	* src/org/eclipse/linuxtools/internal/cdt/autotools/ui/editors/automake/OpenIncludeAction.java (findFile): Use remote
+	file proxy.
+	* src/org/eclipse/linuxtools/internal/cdt/autotools/ui/editors/automake/EditorUtility.java (openInEditor): Comment out
+	file manipulation using paths.
+	* src/org/eclipse/linuxtools/internal/cdt/autotools/ui/actions/InvokeAction.java (ExecuteProgressDialog.run): 
+	Use RemoteProxyManager to run command.
+
 2011-06-16  Jeff Johnston  <jjohnstn@redhat.com>
 
 	* src/org/eclipse/linuxtools/cdt/autotools/ui/editors/parser/IAutoconfMacroValidator.java (validateMacroCall): Add

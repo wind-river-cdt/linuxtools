@@ -15,7 +15,6 @@
  *******************************************************************************/
 package org.eclipse.linuxtools.internal.cdt.autotools.ui.editors.automake;
 
-import java.io.File;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -30,6 +29,7 @@ import org.eclipse.cdt.core.parser.IScannerInfo;
 import org.eclipse.cdt.core.parser.IScannerInfoProvider;
 import org.eclipse.cdt.ui.CUIPlugin;
 import org.eclipse.cdt.utils.PathUtil;
+import org.eclipse.core.filesystem.IFileStore;
 import org.eclipse.core.filesystem.URIUtil;
 import org.eclipse.core.resources.IContainer;
 import org.eclipse.core.resources.IFile;
@@ -50,6 +50,8 @@ import org.eclipse.jface.viewers.ISelectionProvider;
 import org.eclipse.jface.viewers.IStructuredSelection;
 import org.eclipse.jface.viewers.LabelProvider;
 import org.eclipse.jface.window.Window;
+import org.eclipse.linuxtools.internal.cdt.autotools.core.RemoteProxyManager;
+import org.eclipse.linuxtools.internal.cdt.autotools.core.IRemoteFileProxy;
 import org.eclipse.linuxtools.internal.cdt.autotools.ui.MakeUIImages;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.widgets.MessageBox;
@@ -95,6 +97,7 @@ public class OpenIncludeAction extends Action {
 			}
 			if (filesFound.isEmpty() && res != null) {
 				IProject proj = res.getProject();
+				IRemoteFileProxy proxy = RemoteProxyManager.getInstance().getFileProxy(proj);
 				String includeName = include.getElementName();
 				// Search in the scannerInfo information
 				IScannerInfoProvider provider =  CCorePlugin.getDefault().getScannerInfoProvider(proj);
@@ -114,19 +117,19 @@ public class OpenIncludeAction extends Action {
 							IPath location= include.getTranslationUnit().getLocation();
 							if (location != null) {
 								String currentDir= location.removeLastSegments(1).toOSString();
-								findFile(new String[] { currentDir }, includeName, filesFound);
+								findFile(new String[] { currentDir }, includeName, proxy, filesFound);
 							}
 							if (filesFound.isEmpty()) {
 								// search in "..." include directories
 								String[] localIncludePaths = scanInfo.getLocalIncludePath();
-								findFile(localIncludePaths, includeName, filesFound);
+								findFile(localIncludePaths, includeName, proxy, filesFound);
 							}
 						}
 	
 						if (filesFound.isEmpty()) {
 							// search in <...> include directories
 							String[] includePaths = scanInfo.getIncludePaths();
-							findFile(includePaths, includeName, filesFound);
+							findFile(includePaths, includeName, proxy, filesFound);
 						}
 					}
 					
@@ -196,13 +199,14 @@ public class OpenIncludeAction extends Action {
 		return ResourcesPlugin.getWorkspace().getRoot();
 	}
 	
-	private void findFile(String[] includePaths, String name, ArrayList<Object> list)
+	private void findFile(String[] includePaths, String name, 
+			IRemoteFileProxy proxy, ArrayList<Object> list)
 			throws CoreException {
 		// in case it is an absolute path
 		IPath includeFile= new Path(name);		
 		if (includeFile.isAbsolute()) {
 			includeFile = PathUtil.getCanonicalPath(includeFile);
-			if (includeFile.toFile().exists()) {
+			if (proxy.getResource(includeFile.toString()).fetchInfo().exists()) {
 				list.add(includeFile);
 				return;
 			}
@@ -210,8 +214,8 @@ public class OpenIncludeAction extends Action {
 		HashSet<IPath> foundSet = new HashSet<IPath>();
 		for (int i = 0; i < includePaths.length; i++) {
 			IPath path = PathUtil.getCanonicalPath(new Path(includePaths[i]).append(includeFile));
-			File file = path.toFile();
-			if (file.exists()) {
+			IFileStore f = proxy.getResource(path.toString());
+			if (f != null && f.fetchInfo().exists()) {
 				IPath[] paths = resolveIncludeLink(path);
 				for (int j = 0; j < paths.length; j++) {
 					IPath p = paths[j];

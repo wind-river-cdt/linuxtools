@@ -10,7 +10,6 @@
  *******************************************************************************/
 package org.eclipse.linuxtools.internal.cdt.autotools.ui.editors.automake;
 
-import java.io.File;
 
 public class Target implements ITarget {
 
@@ -24,11 +23,4 @@ public class Target implements ITarget {
 		return target;
 	}
 
-	public boolean exits() {
-		return new File(target).exists();
-	}
-
-	public long lastModified() {
-		return new File(target).lastModified();
-	}
 }
