@@ -1,3 +1,16 @@
+2011-10-07  Jeff Johnston  <jjohnstn@redhat.com>
+
+	* META-INF/MANIFEST.MF: Add dependency on org.eclipse.linuxtools.profiling.launch.
+	* src/org/eclipse/linuxtools/internal/cdt/autotools/core/AutotoolsNewMakeGenerator.java: Use new
+	IRemoteCommandLauncher interface and handle refactoring of remote proxy classes into Profiling
+	component.
+	* src/org/eclipse/linuxtools/internal/cdt/autotools/core/PkgconfigErrorResolution.java: Ditto.
+	* src/org/eclipse/linuxtools/internal/cdt/autotools/core/configure/AutotoolsConfigurationManager.java: Ditto.
+	* src/org/eclipse/linuxtools/internal/cdt/autotools/core/LocalFileProxy.java: Moved to profiling launch.
+	* src/org/eclipse/linuxtools/internal/cdt/autotools/core/FileProxyManager.java: Ditto.
+	* src/org/eclipse/linuxtools/internal/cdt/autotools/core/IRemoteFileProxy.java: Ditto.
+	* src/org/eclipse/linuxtools/internal/cdt/autotools/core/RemoteProxyManager.java: Ditto.
+
 2011-09-08  Jeff Johnston  <jjohnstn@redhat.com>
 
 	* src/org/eclipse/linuxtools/internal/cdt/autotools/core/configure/AutotoolsConfigurationManager.java (applyConfigs):
