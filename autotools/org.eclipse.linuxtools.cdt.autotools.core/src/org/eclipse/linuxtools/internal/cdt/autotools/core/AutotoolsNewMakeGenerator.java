@@ -74,6 +74,10 @@ import org.eclipse.linuxtools.cdt.autotools.core.AutotoolsPlugin;
 import org.eclipse.linuxtools.internal.cdt.autotools.core.configure.AutotoolsConfigurationManager;
 import org.eclipse.linuxtools.internal.cdt.autotools.core.configure.IAConfiguration;
 import org.eclipse.linuxtools.internal.cdt.autotools.core.configure.IConfigureOption;
+import org.eclipse.linuxtools.profiling.launch.IProcess;
+import org.eclipse.linuxtools.profiling.launch.IRemoteCommandLauncher;
+import org.eclipse.linuxtools.profiling.launch.IRemoteFileProxy;
+import org.eclipse.linuxtools.profiling.launch.RemoteProxyManager;
 
 
 @SuppressWarnings("deprecation")
@@ -150,7 +154,7 @@ public class AutotoolsNewMakeGenerator extends MarkerGenerator {
 	}
 	
 	public void initialize(IProject project, IManagedBuildInfo info,
-			IProgressMonitor monitor) {
+			IProgressMonitor monitor) throws CoreException {
 		this.project = project;
 		proxy = RemoteProxyManager.getInstance().getFileProxy(project);
 		ICProjectDescription pdesc = CCorePlugin.getDefault().getProjectDescription(project);
@@ -801,7 +805,7 @@ public class AutotoolsNewMakeGenerator extends MarkerGenerator {
 		OutputStream stderr = stdout;
 
 //		launcher.showCommand(true);
-		Process proc = launcher.execute(commandPath, configTargets, env,
+		IProcess proc = launcher.execute(commandPath, configTargets, env,
 				runPath, new NullProgressMonitor());
 		if (proc != null) {
 			try {
@@ -909,7 +913,7 @@ public class AutotoolsNewMakeGenerator extends MarkerGenerator {
     // Get the path string.  We add a Win check to handle MingW.
     // For MingW, we would rather represent C:\a\b as /C/a/b which
     // doesn't cause Makefile to choke. For Cygwin we use /cygdrive/C/a/b
-    private String getPathString(IPath path) {
+    private String getPathString(IPath path) throws CoreException {
             String s = path.toString();
             if (RemoteProxyManager.getInstance().getOS(project).equals(Platform.OS_WIN32)) {
             	if (getWinOSType().equals("cygwin")) {
@@ -947,8 +951,9 @@ public class AutotoolsNewMakeGenerator extends MarkerGenerator {
 
         // Fix for bug #343731
         RemoteProxyManager rpm = RemoteProxyManager.getInstance();
-        if (rpm.getOS(project).equals(Platform.OS_WIN32)
-                || rpm.getOS(project).equals(Platform.OS_MACOSX)) {
+        String os = rpm.getOS(project);
+        if (os.equals(Platform.OS_WIN32)
+                || os.equals(Platform.OS_MACOSX)) {
         	removePWD = true;
             // Neither Mac or Windows support calling scripts directly.
             String command = null;
@@ -1036,7 +1041,7 @@ public class AutotoolsNewMakeGenerator extends MarkerGenerator {
 
 //		launcher.showCommand(true);
 		// Run the shell script via shell command.
-		Process proc = launcher.execute(new Path(SHELL_COMMAND), configTargets, env,
+		IProcess proc = launcher.execute(new Path(SHELL_COMMAND), configTargets, env,
 				runPath, new NullProgressMonitor());
 		if (proc != null) {
 			try {

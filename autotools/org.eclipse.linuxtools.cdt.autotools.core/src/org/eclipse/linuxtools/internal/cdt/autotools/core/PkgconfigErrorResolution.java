@@ -23,6 +23,9 @@ import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.NullProgressMonitor;
 import org.eclipse.core.runtime.Path;
 import org.eclipse.linuxtools.cdt.autotools.core.AutotoolsPlugin;
+import org.eclipse.linuxtools.profiling.launch.IProcess;
+import org.eclipse.linuxtools.profiling.launch.IRemoteCommandLauncher;
+import org.eclipse.linuxtools.profiling.launch.RemoteProxyManager;
 import org.eclipse.ui.IMarkerResolution;
 
 public class PkgconfigErrorResolution implements IMarkerResolution {
@@ -59,19 +62,20 @@ public class PkgconfigErrorResolution implements IMarkerResolution {
 		// Get a launcher for the config command
 		IResource resource = marker.getResource();
 		IProject project = resource.getProject();
-		IRemoteCommandLauncher launcher = RemoteProxyManager.getInstance().getLauncher(project);
-		IPath commandPath = new Path("rpm"); //$NON-NLS-1$
-		String[] commandArgs = 
-			new String[] {"-q", //$NON-NLS-1$
-				"--queryformat", //$NON-NLS-1$
-				"%{NAME}", //$NON-NLS-1$
-				"--whatprovides", //$NON-NLS-1$
-				pkgconfigPath.toOSString()};
 		try {
+			IRemoteCommandLauncher launcher = RemoteProxyManager.getInstance().getLauncher(project);
+			IPath commandPath = new Path("rpm"); //$NON-NLS-1$
+			String[] commandArgs = 
+					new String[] {"-q", //$NON-NLS-1$
+					"--queryformat", //$NON-NLS-1$
+					"%{NAME}", //$NON-NLS-1$
+					"--whatprovides", //$NON-NLS-1$
+					pkgconfigPath.toOSString()};
+
 			// Use CDT launcher to run rpm to query the package that provides
 			// the pkgconfig .pc file for the package in question.
 			ConsoleOutputStream output = new ConsoleOutputStream();
-			Process proc = launcher.execute(commandPath, commandArgs, null,
+			IProcess proc = launcher.execute(commandPath, commandArgs, null,
 					new Path("."), new NullProgressMonitor());
 			if (proc != null) {
 				try {
