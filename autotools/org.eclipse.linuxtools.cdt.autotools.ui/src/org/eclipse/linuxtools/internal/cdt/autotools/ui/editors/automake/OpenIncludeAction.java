@@ -50,9 +50,9 @@ import org.eclipse.jface.viewers.ISelectionProvider;
 import org.eclipse.jface.viewers.IStructuredSelection;
 import org.eclipse.jface.viewers.LabelProvider;
 import org.eclipse.jface.window.Window;
-import org.eclipse.linuxtools.internal.cdt.autotools.core.RemoteProxyManager;
-import org.eclipse.linuxtools.internal.cdt.autotools.core.IRemoteFileProxy;
 import org.eclipse.linuxtools.internal.cdt.autotools.ui.MakeUIImages;
+import org.eclipse.linuxtools.profiling.launch.IRemoteFileProxy;
+import org.eclipse.linuxtools.profiling.launch.RemoteProxyManager;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.widgets.MessageBox;
 

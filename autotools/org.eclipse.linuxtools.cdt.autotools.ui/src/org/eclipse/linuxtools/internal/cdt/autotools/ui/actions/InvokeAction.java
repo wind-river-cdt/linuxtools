@@ -49,8 +49,9 @@ import org.eclipse.jface.dialogs.ProgressMonitorDialog;
 import org.eclipse.jface.operation.IRunnableWithProgress;
 import org.eclipse.linuxtools.cdt.autotools.ui.AutotoolsUIPlugin;
 import org.eclipse.linuxtools.internal.cdt.autotools.core.AutotoolsNewMakeGenerator;
-import org.eclipse.linuxtools.internal.cdt.autotools.core.IRemoteCommandLauncher;
-import org.eclipse.linuxtools.internal.cdt.autotools.core.RemoteProxyManager;
+import org.eclipse.linuxtools.profiling.launch.IProcess;
+import org.eclipse.linuxtools.profiling.launch.IRemoteCommandLauncher;
+import org.eclipse.linuxtools.profiling.launch.RemoteProxyManager;
 import org.eclipse.swt.widgets.Shell;
 
 public abstract class InvokeAction extends AbstractTargetAction {
@@ -250,16 +251,16 @@ public abstract class InvokeAction extends AbstractTargetAction {
 		throws InvocationTargetException, InterruptedException {
 			ByteArrayOutputStream stdout = new ByteArrayOutputStream();
 			ByteArrayOutputStream stderr = new ByteArrayOutputStream();
-			IRemoteCommandLauncher cmdL = RemoteProxyManager.getInstance().getLauncher(project);
-			outputs = null;
 
 			// invoke command
 			try {
+				IRemoteCommandLauncher cmdL = RemoteProxyManager.getInstance().getLauncher(project);
+				outputs = null;
 				monitor.beginTask(
 						InvokeMessages.getFormattedString("InvokeAction.progress.message", // $NON-NLS-1$
 								new String[]{command.toOSString()}), IProgressMonitor.UNKNOWN);
 				monitor.worked(1);
-				Process process = cmdL.execute(command, argumentList, envList,
+				IProcess process = cmdL.execute(command, argumentList, envList,
 						execDir, new NullProgressMonitor());
 
 				if (cmdL.waitAndRead(stdout, stderr, new NullProgressMonitor()) == IRemoteCommandLauncher.OK) {
@@ -421,7 +422,7 @@ public abstract class InvokeAction extends AbstractTargetAction {
 
 //								launcher.showCommand(true);
 								// Run the shell script via shell command.
-								Process proc = launcher.execute(new Path(SHELL_COMMAND), newArgumentList, env,
+								IProcess proc = launcher.execute(new Path(SHELL_COMMAND), newArgumentList, env,
 										execDir, new NullProgressMonitor());
 								if (proc != null) {
 									try {
